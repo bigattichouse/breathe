@@ -32,23 +32,27 @@ static const char *skip_ws(const char *p)
 
 /* ---------------------------------------------------------------- built-ins */
 
-static void add_engine_builtin(const char *name, Phase *phases, int count)
+static void add_engine_builtin(const char *name, const char *desc,
+                               Phase *phases, int count)
 {
     Engine *e = &g_engines[g_engine_count++];
     memset(e, 0, sizeof(*e));
-    strncpy(e->name, name, sizeof(e->name) - 1);
+    strncpy(e->name,        name, sizeof(e->name)        - 1);
+    strncpy(e->description, desc, sizeof(e->description) - 1);
     memcpy(e->phases, phases, count * sizeof(Phase));
     e->phase_count = count;
     e->is_builtin  = 1;
 }
 
-static void add_program_builtin(const char *name, const char *engine,
+static void add_program_builtin(const char *name, const char *desc,
+                                const char *engine,
                                 int dur_min, int rounds,
                                 int *hold_targets, int htcount)
 {
     Program *p = &g_programs[g_program_count++];
     memset(p, 0, sizeof(*p));
     strncpy(p->name,        name,   sizeof(p->name)        - 1);
+    strncpy(p->description, desc,   sizeof(p->description) - 1);
     strncpy(p->engine_name, engine, sizeof(p->engine_name) - 1);
     p->duration_min = dur_min;
     p->rounds       = rounds;
@@ -63,31 +67,38 @@ static void add_program_builtin(const char *name, const char *engine,
 
 void engine_init_builtins(void)
 {
-    /* resonance: 5s inhale, 5s exhale */
     {
         Phase ph[2] = {
             { PHASE_INHALE, DUR_FIXED, 5 },
             { PHASE_EXHALE, DUR_FIXED, 5 }
         };
-        add_engine_builtin("resonance", ph, 2);
+        add_engine_builtin("resonance",
+            "Paced 5s inhale / 5s exhale. Targets ~6 breaths/min, the "
+            "cardiovascular resonance frequency linked to improved heart-rate "
+            "variability and parasympathetic tone.",
+            ph, 2);
     }
-    /* calm: 4s inhale, 6s exhale */
     {
         Phase ph[2] = {
             { PHASE_INHALE, DUR_FIXED, 4 },
             { PHASE_EXHALE, DUR_FIXED, 6 }
         };
-        add_engine_builtin("calm", ph, 2);
+        add_engine_builtin("calm",
+            "Exhale-weighted 4s inhale / 6s exhale. The longer exhale "
+            "emphasises parasympathetic activation, making it well-suited "
+            "for winding down before sleep.",
+            ph, 2);
     }
-    /* extended: 4s inhale, 6s exhale (same as calm pattern, different name) */
     {
         Phase ph[2] = {
             { PHASE_INHALE, DUR_FIXED, 4 },
             { PHASE_EXHALE, DUR_FIXED, 6 }
         };
-        add_engine_builtin("extended", ph, 2);
+        add_engine_builtin("extended",
+            "Same 4:6 ratio as calm but used for longer 20-minute sessions "
+            "matching the Bernardi resonance-breathing clinical trial protocol.",
+            ph, 2);
     }
-    /* box: 4s inhale, 4s hold, 4s exhale, 4s hold */
     {
         Phase ph[4] = {
             { PHASE_INHALE, DUR_FIXED, 4 },
@@ -95,9 +106,12 @@ void engine_init_builtins(void)
             { PHASE_EXHALE, DUR_FIXED, 4 },
             { PHASE_HOLD,   DUR_FIXED, 4 }
         };
-        add_engine_builtin("box", ph, 4);
+        add_engine_builtin("box",
+            "Equal 4s inhale / hold / exhale / hold (box or square breathing). "
+            "Widely used by military and first-responders for rapid stress "
+            "regulation and mental focus under pressure.",
+            ph, 4);
     }
-    /* tummo: rapid(30), hold:target(30), inhale:4, hold:15 */
     {
         Phase ph[4] = {
             { PHASE_RAPID,  DUR_COUNT,  30 },
@@ -105,18 +119,37 @@ void engine_init_builtins(void)
             { PHASE_INHALE, DUR_FIXED,  4  },
             { PHASE_HOLD,   DUR_FIXED,  15 }
         };
-        add_engine_builtin("tummo", ph, 4);
+        add_engine_builtin("tummo",
+            "Tibetan 'inner fire' breathwork (popularised by Wim Hof): 30 rapid "
+            "power breaths followed by an exhale retention hold, then a deep "
+            "recovery inhale held 15s. Activates the sympathetic system and "
+            "elevates core temperature. Do not practise near water.",
+            ph, 4);
     }
 
     /* Programs */
-    add_program_builtin("balanced", "resonance", 10, 0, NULL, 0);
-    add_program_builtin("calm",     "calm",      15, 0, NULL, 0);
-    add_program_builtin("extended", "extended",  20, 0, NULL, 0);
-    add_program_builtin("box",      "box",       10, 0, NULL, 0);
+    add_program_builtin("balanced",
+        "10-minute resonance session. Good all-purpose default — auto-selected "
+        "before noon.",
+        "resonance", 10, 0, NULL, 0);
+    add_program_builtin("calm",
+        "15-minute exhale-weighted session. Auto-selected after 5 pm for "
+        "evening wind-down.",
+        "calm", 15, 0, NULL, 0);
+    add_program_builtin("extended",
+        "20-minute resonance session matching clinical trial durations. "
+        "Auto-selected 12–5 pm.",
+        "extended", 20, 0, NULL, 0);
+    add_program_builtin("box",
+        "10-minute box-breathing session for focus or acute stress relief.",
+        "box", 10, 0, NULL, 0);
 
     {
         int targets[3] = { 30, 60, 90 };
-        add_program_builtin("tummo", "tummo", 0, 3, targets, 3);
+        add_program_builtin("tummo",
+            "3-round Tummo session with escalating exhale holds (30s / 60s / 90s). "
+            "Consult --safety before use.",
+            "tummo", 0, 3, targets, 3);
     }
 }
 
@@ -329,10 +362,11 @@ int program_delete(const char *name)
 void engine_list(void)
 {
     int i, j;
-    printf("Built-in engines:\n");
+    printf("Engines:\n");
     for (i = 0; i < g_engine_count; i++) {
         Engine *e = &g_engines[i];
-        printf("  %-12s  ", e->name);
+        printf("\n  \033[1m%s\033[0m%s\n    Phases: ",
+               e->name, e->is_builtin ? "" : "  (user)");
         for (j = 0; j < e->phase_count; j++) {
             Phase *ph = &e->phases[j];
             const char *pname = (ph->type == PHASE_INHALE) ? "inhale" :
@@ -347,21 +381,25 @@ void engine_list(void)
                 printf("%s:%ds", pname, ph->value);
         }
         printf("\n");
+        if (e->description[0])
+            printf("    %s\n", e->description);
     }
 }
 
 void program_list(void)
 {
     int i;
-    printf("Built-in programs:\n");
+    printf("Programs:\n");
     for (i = 0; i < g_program_count; i++) {
         Program *p = &g_programs[i];
+        printf("\n  \033[1m%s\033[0m%s\n    ",
+               p->name, p->is_builtin ? "" : "  (user)");
         if (p->rounds > 0)
-            printf("  %-12s  engine:%-10s rounds:%d\n",
-                   p->name, p->engine_name, p->rounds);
+            printf("engine:%-10s rounds:%d\n", p->engine_name, p->rounds);
         else
-            printf("  %-12s  engine:%-10s duration:%d min\n",
-                   p->name, p->engine_name, p->duration_min);
+            printf("engine:%-10s duration:%d min\n", p->engine_name, p->duration_min);
+        if (p->description[0])
+            printf("    %s\n", p->description);
     }
 }
 

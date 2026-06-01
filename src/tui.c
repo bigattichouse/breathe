@@ -149,8 +149,10 @@ void tui_render(PhaseType phase,
     printf("\r\033[K");
     printf("  space pause \xc2\xb7 s mute \xc2\xb7 q quit");
 
-    /* Move cursor back to top of our 4-line block */
-    printf("\033[4A\r");
+    /* Move cursor back to top of our 4-line block.
+     * We printed 3 newlines (header, phase, bar) and left the help line
+     * without a trailing newline, so net movement is 3 lines down. */
+    printf("\033[3A\r");
     fflush(stdout);
 }
 
@@ -161,8 +163,10 @@ void tui_summary(const char *preset_name,
                  int breaths,
                  const char *status)
 {
-    /* Position after our 4-line block */
-    printf("\033[4B\n");
+    /* Position after our 4-line block.
+     * Cursor is at line 0 of block after cleanup's \n moves us to line 1.
+     * Down 2 more lands on line 3 (help), then \n moves past it. */
+    printf("\033[2B\n");
     printf(RESET);
     printf("Session complete: %s\n", preset_name);
     int m = (int)(elapsed_s / 60);
