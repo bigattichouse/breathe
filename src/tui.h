@@ -28,18 +28,19 @@ void tui_cleanup(void);
    status: active/paused/muted indicator
    pulse_on: for hold-pulse, alternates every 500ms
 */
-void tui_render(PhaseType phase,
-                double     progress,
-                double     remaining_s,
-                int        rapid_n,
-                int        rapid_total,
-                double     elapsed_total_s,
-                int        duration_s,
+void tui_render(PhaseType   phase,
+                double      progress,
+                double      remaining_s,
+                int         rapid_n,
+                int         rapid_total,
+                double      elapsed_total_s,
+                int         duration_s,
                 const char *preset_name,
-                int        inhale_s,
-                int        exhale_s,
-                TuiStatus  status,
-                int        pulse_on);
+                int         inhale_s,
+                int         exhale_s,
+                TuiStatus   status,
+                int         pulse_on,
+                const char *hint);
 
 /* Print end-of-session summary */
 void tui_summary(const char *preset_name,

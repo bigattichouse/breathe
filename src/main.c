@@ -210,7 +210,8 @@ static void run_session(Session *s)
                        s->duration_s,
                        s->preset_name,
                        s->inhale_s, s->exhale_s,
-                       TUI_STATUS_PAUSED, pulse_on);
+                       TUI_STATUS_PAUSED, pulse_on,
+                       e->phase_hints[cur_phase->type]);
 
             struct timespec ts = { 0, 16000000L };
             nanosleep(&ts, NULL);
@@ -334,7 +335,8 @@ static void run_session(Session *s)
                    session_elapsed, s->duration_s,
                    s->preset_name,
                    s->inhale_s, s->exhale_s,
-                   tstatus, pulse_on);
+                   tstatus, pulse_on,
+                   e->phase_hints[cur_phase->type]);
 
         struct timespec ts = { 0, 16000000L };  /* ~60fps */
         nanosleep(&ts, NULL);

@@ -45,6 +45,16 @@ static void add_engine_builtin(const char *name, const char *desc,
     e->is_builtin  = 1;
 }
 
+static void set_phase_hints(const char *h_inhale, const char *h_exhale,
+                             const char *h_hold, const char *h_rapid)
+{
+    Engine *e = &g_engines[g_engine_count - 1];
+    strncpy(e->phase_hints[PHASE_INHALE], h_inhale, sizeof(e->phase_hints[0]) - 1);
+    strncpy(e->phase_hints[PHASE_EXHALE], h_exhale, sizeof(e->phase_hints[0]) - 1);
+    strncpy(e->phase_hints[PHASE_HOLD],   h_hold,   sizeof(e->phase_hints[0]) - 1);
+    strncpy(e->phase_hints[PHASE_RAPID],  h_rapid,  sizeof(e->phase_hints[0]) - 1);
+}
+
 static void add_program_builtin(const char *name, const char *desc,
                                 const char *engine,
                                 int dur_min, int rounds,
@@ -79,6 +89,11 @@ void engine_init_builtins(void)
             "cardiovascular resonance frequency linked to improved heart-rate "
             "variability and parasympathetic tone.",
             ph, 2);
+        set_phase_hints(
+            "In through your nose... let your belly rise.",
+            "Out through your nose... let your belly fall.",
+            "Hold gently... stay relaxed.",
+            "");
     }
     {
         Phase ph[2] = {
@@ -90,6 +105,11 @@ void engine_init_builtins(void)
             "emphasises parasympathetic activation, making it well-suited "
             "for winding down before sleep.",
             ph, 2);
+        set_phase_hints(
+            "In through your nose... let your belly rise.",
+            "Out through your nose... let your belly fall.",
+            "Hold gently... stay relaxed.",
+            "");
     }
     {
         Phase ph[2] = {
@@ -100,6 +120,11 @@ void engine_init_builtins(void)
             "Same 4:6 ratio as calm but used for longer 20-minute sessions "
             "matching the Bernardi resonance-breathing clinical trial protocol.",
             ph, 2);
+        set_phase_hints(
+            "In through your nose... let your belly rise.",
+            "Out through your nose... let your belly fall.",
+            "Hold gently... stay relaxed.",
+            "");
     }
     {
         Phase ph[4] = {
@@ -113,6 +138,11 @@ void engine_init_builtins(void)
             "Widely used by military and first-responders for rapid stress "
             "regulation and mental focus under pressure.",
             ph, 4);
+        set_phase_hints(
+            "In through your nose... let your belly rise.",
+            "Out through your nose... let your belly fall.",
+            "Hold gently... stay relaxed.",
+            "");
     }
     {
         Phase ph[4] = {
@@ -127,6 +157,11 @@ void engine_init_builtins(void)
             "recovery inhale held 15s. Activates the sympathetic system and "
             "elevates core temperature. Do not practise near water.",
             ph, 4);
+        set_phase_hints(
+            "Deep in through your nose... fill completely.",
+            "",
+            "Hold... stay relaxed.",
+            "Breathe through your mouth, pumping your belly...");
     }
     {
         Phase ph[3] = {
@@ -139,6 +174,11 @@ void engine_init_builtins(void)
             "inhale activates the sympathetic nervous system, countering the "
             "mid-afternoon energy dip without caffeine.",
             ph, 3);
+        set_phase_hints(
+            "In through your nose... let your belly rise.",
+            "Out through your nose... let your belly fall.",
+            "Hold gently... stay alert.",
+            "");
     }
 
     /* Programs */

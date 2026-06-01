@@ -9,7 +9,7 @@
 #include "audio.h"
 
 #define BAR_WIDTH 30
-#define TUI_BLOCK_LINES 4   /* header + phase + bar + help */
+#define TUI_BLOCK_LINES 5   /* header + phase + bar + hint + help */
 
 /* ANSI helpers */
 #define RESET   "\033[0m"
@@ -84,18 +84,19 @@ static void draw_bar(PhaseType phase, double progress, int pulse_on,
 
 /* ----------------------------------------------------------------- render */
 
-void tui_render(PhaseType phase,
-                double     progress,
-                double     remaining_s,
-                int        rapid_n,
-                int        rapid_total,
-                double     elapsed_total_s,
-                int        duration_s,
+void tui_render(PhaseType   phase,
+                double      progress,
+                double      remaining_s,
+                int         rapid_n,
+                int         rapid_total,
+                double      elapsed_total_s,
+                int         duration_s,
                 const char *preset_name,
-                int        inhale_s,
-                int        exhale_s,
-                TuiStatus  status,
-                int        pulse_on)
+                int         inhale_s,
+                int         exhale_s,
+                TuiStatus   status,
+                int         pulse_on,
+                const char *hint)
 {
     /* Time display */
     int elapsed_min = (int)(elapsed_total_s / 60);
@@ -144,6 +145,12 @@ void tui_render(PhaseType phase,
     /* Bar line */
     printf("\r\033[K");
     draw_bar(phase, progress, pulse_on, rapid_n, rapid_total);
+    printf("\n");
+
+    /* Hint line */
+    printf("\r\033[K");
+    if (hint && hint[0])
+        printf("  " DIM "%s" RESET, hint);
     printf("\n");
 
     /* Help line */

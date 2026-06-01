@@ -30,6 +30,7 @@ typedef struct {
     Phase  phases[16];
     int    phase_count;
     int    is_builtin;  /* 1 = cannot be deleted */
+    char   phase_hints[4][96]; /* indexed by PhaseType; shown in TUI during session */
 } Engine;
 
 /* A program ties an engine to a duration/rounds, with optional per-round targets */
