@@ -14,8 +14,8 @@ int main(void)
     engine_reset();
     engine_init_builtins();
 
-    ASSERT_GT(g_engine_count,  4, "g_engine_count >= 5");
-    ASSERT_GT(g_program_count, 4, "g_program_count >= 5");
+    ASSERT_GT(g_engine_count,  5, "g_engine_count >= 6");
+    ASSERT_GT(g_program_count, 5, "g_program_count >= 6");
 
     /* ------------------------------------------------------------------ */
     SUITE("engine_find");
@@ -79,6 +79,24 @@ int main(void)
     }
 
     /* ------------------------------------------------------------------ */
+    SUITE("energize engine structure");
+    {
+        Engine *e = engine_find("energize");
+        ASSERT_NOTNULL(e, "energize not NULL");
+        ASSERT_EQ(e->phase_count, 3, "energize phase_count == 3");
+        ASSERT_EQ((int)e->phases[0].type,     (int)PHASE_INHALE, "energize ph0 INHALE");
+        ASSERT_EQ((int)e->phases[0].dur_type, (int)DUR_FIXED,    "energize ph0 DUR_FIXED");
+        ASSERT_EQ(e->phases[0].value, 6, "energize ph0 value 6");
+        ASSERT_EQ((int)e->phases[1].type,     (int)PHASE_HOLD,   "energize ph1 HOLD");
+        ASSERT_EQ((int)e->phases[1].dur_type, (int)DUR_FIXED,    "energize ph1 DUR_FIXED");
+        ASSERT_EQ(e->phases[1].value, 2, "energize ph1 value 2");
+        ASSERT_EQ((int)e->phases[2].type,     (int)PHASE_EXHALE, "energize ph2 EXHALE");
+        ASSERT_EQ((int)e->phases[2].dur_type, (int)DUR_FIXED,    "energize ph2 DUR_FIXED");
+        ASSERT_EQ(e->phases[2].value, 4, "energize ph2 value 4");
+        ASSERT_EQ(e->is_builtin, 1, "energize is_builtin==1");
+    }
+
+    /* ------------------------------------------------------------------ */
     SUITE("program_find");
     {
         Program *p = program_find("balanced");
@@ -96,6 +114,13 @@ int main(void)
         ASSERT_EQ(p->hold_targets[2], 90, "tummo hold_targets[2]==90");
     }
     ASSERT_NOTNULL(program_find("TUMMO"), "find TUMMO case-insensitive");
+    {
+        Program *p = program_find("afternoon");
+        ASSERT_NOTNULL(p, "find afternoon");
+        ASSERT_STR(p->engine_name, "energize", "afternoon engine_name==energize");
+        ASSERT_EQ(p->duration_min, 5, "afternoon duration_min==5");
+        ASSERT_EQ(p->is_builtin, 1, "afternoon is_builtin==1");
+    }
 
     /* ------------------------------------------------------------------ */
     SUITE("builtin protection");

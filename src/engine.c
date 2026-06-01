@@ -128,6 +128,18 @@ void engine_init_builtins(void)
             "elevates core temperature. Do not practise near water.",
             ph, 4);
     }
+    {
+        Phase ph[3] = {
+            { PHASE_INHALE, DUR_FIXED, 6 },
+            { PHASE_HOLD,   DUR_FIXED, 2 },
+            { PHASE_EXHALE, DUR_FIXED, 4 }
+        };
+        add_engine_builtin("energize",
+            "Inhale-dominant 6s inhale / 2s hold / 4s exhale. The extended "
+            "inhale activates the sympathetic nervous system, countering the "
+            "mid-afternoon energy dip without caffeine.",
+            ph, 3);
+    }
 
     /* Programs */
     add_program_builtin("balanced",
@@ -140,8 +152,12 @@ void engine_init_builtins(void)
         "calm", 15, 0, NULL, 0);
     add_program_builtin("extended",
         "20-minute resonance session matching clinical trial durations. "
-        "Auto-selected 12–5 pm.",
+        "Auto-selected 12–2 pm.",
         "extended", 20, 0, NULL, 0);
+    add_program_builtin("afternoon",
+        "5-minute energizing session for the mid-afternoon slump. "
+        "Auto-selected 2–5 pm.",
+        "energize", 5, 0, NULL, 0);
     add_program_builtin("box",
         "10-minute box-breathing session for focus or acute stress relief.",
         "box", 10, 0, NULL, 0);
@@ -416,8 +432,10 @@ Program *program_default(void)
     const char *name;
     if (hour < 12)
         name = "balanced";
-    else if (hour < 17)
+    else if (hour < 14)
         name = "extended";
+    else if (hour < 17)
+        name = "afternoon";
     else
         name = "calm";
 
