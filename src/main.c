@@ -22,7 +22,7 @@
 
 static struct termios g_orig_termios;
 static int            g_raw_mode = 0;
-static volatile int   g_interrupted = 0;
+volatile int          g_interrupted = 0;
 
 /* Session state (for signal handler) */
 static const char    *g_preset_name      = "unknown";
@@ -40,7 +40,7 @@ static void term_raw(void)
     if (g_raw_mode) return;
     tcgetattr(STDIN_FILENO, &g_orig_termios);
     struct termios raw = g_orig_termios;
-    raw.c_lflag &= (tcflag_t)~(ECHO | ICANON | ISIG);
+    raw.c_lflag &= (tcflag_t)~(ECHO | ICANON);  /* keep ISIG so Ctrl-C delivers SIGINT */
     raw.c_cc[VMIN]  = 0;
     raw.c_cc[VTIME] = 0;
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);

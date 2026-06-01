@@ -5,6 +5,10 @@
 #include <math.h>
 
 #include "test_runner.h"
+
+/* provide the symbol that measure.c references from main.c */
+volatile int g_interrupted = 0;
+
 #include "../src/measure.c"
 
 int main(void)

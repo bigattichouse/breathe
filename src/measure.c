@@ -10,6 +10,8 @@
 
 #include "measure.h"
 
+extern volatile int g_interrupted;  /* set by main.c's SIGINT handler */
+
 #define MAX_PHASES 1024
 
 typedef enum {
@@ -322,6 +324,8 @@ void measure_run(void)
     int done = 0;
 
     while (!done) {
+        if (g_interrupted) { end_phase(); done = 1; break; }
+
         /* Non-blocking key read */
         char buf[8];
         int n = read_key_nonblock(buf, sizeof(buf));
