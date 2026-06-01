@@ -17,6 +17,10 @@ SoundMode g_sound_mode = SOUND_ON;
 
 static char g_player[256] = "";  /* path to paplay or aplay */
 
+/* Pre-generated tone file paths: [0]=inhale 800Hz, [1]=exhale 400Hz, [2]=hold 600Hz */
+static char g_tone_files[3][64];
+static int  g_tones_ready = 0;
+
 /* ------------------------------------------------------------------ WAV gen */
 
 /* Write little-endian 16-bit */
@@ -93,6 +97,32 @@ unsigned char *audio_gen_wav(double freq_hz, int dur_ms, double amp,
     return buf;
 }
 
+/* ------------------------------------------------------------------ helpers */
+
+/* Write a WAV buffer to a temp file; stores path in dst (must be >= 64 bytes).
+ * Returns 0 on success, -1 on failure. */
+static int write_tone_file(double freq_hz, char *dst, size_t dst_len)
+{
+    size_t wav_size = 0;
+    unsigned char *wav = audio_gen_wav(freq_hz, 100, 0.3, &wav_size);
+    if (!wav) return -1;
+
+    /* Use a template that mkstemps can fill */
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "/tmp/breathe_tone_XXXXXX.wav");
+    int fd = mkstemps(tmp, 4);
+    if (fd < 0) { free(wav); return -1; }
+
+    ssize_t written = write(fd, wav, wav_size);
+    close(fd);
+    free(wav);
+
+    if (written < 0) { unlink(tmp); return -1; }
+
+    snprintf(dst, dst_len, "%s", tmp);
+    return 0;
+}
+
 /* ------------------------------------------------------------------ player */
 
 void audio_init(int no_sound_flag)
@@ -112,12 +142,49 @@ void audio_init(int no_sound_flag)
     for (i = 0; players[i]; i++) {
         if (access(players[i], X_OK) == 0) {
             strncpy(g_player, players[i], sizeof(g_player) - 1);
-            return;
+            break;
         }
     }
 
-    /* No player found; fall back to bell-only */
-    g_sound_mode = SOUND_BELL;
+    if (g_player[0] == '\0') {
+        /* No player found; fall back to bell-only */
+        g_sound_mode = SOUND_BELL;
+        return;
+    }
+
+    /* Pre-generate tone files: inhale=800Hz, exhale=400Hz, hold=600Hz */
+    double freqs[3] = { 800.0, 400.0, 600.0 };
+    int ok = 1;
+    for (i = 0; i < 3; i++) {
+        if (write_tone_file(freqs[i], g_tone_files[i], sizeof(g_tone_files[i])) != 0) {
+            ok = 0;
+            break;
+        }
+    }
+    if (!ok) {
+        /* Clean up any files that were created */
+        for (i = 0; i < 3; i++) {
+            if (g_tone_files[i][0]) {
+                unlink(g_tone_files[i]);
+                g_tone_files[i][0] = '\0';
+            }
+        }
+        g_sound_mode = SOUND_BELL;
+        return;
+    }
+    g_tones_ready = 1;
+}
+
+void audio_cleanup(void)
+{
+    int i;
+    for (i = 0; i < 3; i++) {
+        if (g_tone_files[i][0]) {
+            unlink(g_tone_files[i]);
+            g_tone_files[i][0] = '\0';
+        }
+    }
+    g_tones_ready = 0;
 }
 
 void audio_play_cue(int phase_type)
@@ -129,26 +196,15 @@ void audio_play_cue(int phase_type)
         return;
     }
 
-    /* Choose frequency: 0=inhale 800Hz, 1=exhale 400Hz, 2=hold 600Hz */
-    double freq = (phase_type == 0) ? 800.0 :
-                  (phase_type == 1) ? 400.0 : 600.0;
+    if (!g_tones_ready) return;
 
-    size_t wav_size = 0;
-    unsigned char *wav = audio_gen_wav(freq, 100, 0.3, &wav_size);
-    if (!wav) return;
+    /* 0=inhale 800Hz, 1=exhale 400Hz, 2=hold 600Hz */
+    int idx = (phase_type == 0) ? 0 :
+              (phase_type == 1) ? 1 : 2;
 
-    /* Write to temp file */
-    char tmpname[] = "/tmp/breathe_XXXXXX.wav";
-    int fd = mkstemps(tmpname, 4);
-    if (fd < 0) { free(wav); return; }
+    const char *path = g_tone_files[idx];
 
-    ssize_t written = write(fd, wav, wav_size);
-    close(fd);
-    free(wav);
-
-    if (written < 0) { unlink(tmpname); return; }
-
-    /* Fork and exec player */
+    /* Fork and exec player — file remains on disk until audio_cleanup() */
     pid_t pid = fork();
     if (pid == 0) {
         /* child: redirect stdout/stderr to /dev/null */
@@ -158,20 +214,10 @@ void audio_play_cue(int phase_type)
             dup2(devnull, STDERR_FILENO);
             close(devnull);
         }
-        execl(g_player, g_player, tmpname, (char*)NULL);
+        execl(g_player, g_player, path, (char*)NULL);
         _exit(1);
     }
-
-    /* parent: unlink tmp immediately; player has it open */
-    unlink(tmpname);
-
-    if (pid > 0) {
-        /* wait in background - we don't want to block */
-        /* use WNOHANG so we don't stall the render loop */
-        int status;
-        waitpid(pid, &status, WNOHANG);
-        /* If still running that's fine - it's short */
-    }
+    /* parent: SIGCHLD=SIG_IGN (set in main.c) auto-reaps the child */
 }
 
 void audio_cycle_mode(void)

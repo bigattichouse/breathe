@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 #include <time.h>
 #include <termios.h>
 #include <fcntl.h>
@@ -10,7 +11,7 @@
 
 #include "measure.h"
 
-extern volatile int g_interrupted;  /* set by main.c's SIGINT handler */
+extern volatile sig_atomic_t g_interrupted;  /* set by main.c's SIGINT handler */
 
 #define MAX_PHASES 1024
 
@@ -43,10 +44,6 @@ static double ms_since(struct timespec *start)
            (now.tv_nsec - start->tv_nsec) / 1.0e6;
 }
 
-static double ms_now_since(struct timespec *start)
-{
-    return ms_since(start);
-}
 
 static void end_phase(void)
 {
@@ -101,9 +98,10 @@ static void write_measurements_csv(void)
     char path[512];
     snprintf(path, sizeof(path), "%s/.breathe_measurements.csv", home);
 
-    /* Generate session_id: 6 hex chars */
+    /* Generate session_id: 6 hex chars (XOR with pid to avoid same-second collisions) */
     char session_id[8];
-    snprintf(session_id, sizeof(session_id), "%06x", (unsigned int)(time(NULL) & 0xFFFFFF));
+    snprintf(session_id, sizeof(session_id), "%06x",
+             (unsigned int)((time(NULL) ^ (unsigned)getpid()) & 0xFFFFFF));
 
     /* Check if header needed */
     FILE *check = fopen(path, "r");
@@ -163,7 +161,7 @@ static void print_summary(void)
         stats[idx].count++;
     }
 
-    double total_s = ms_now_since(&g_session_start) / 1000.0;
+    double total_s = ms_since(&g_session_start) / 1000.0;
     int inhale_count = stats[MPHASE_INHALE].count;
     double bpm = (total_s > 0 && inhale_count > 0)
                  ? ((double)inhale_count / total_s * 60.0) : 0.0;
@@ -388,7 +386,7 @@ void measure_run(void)
         }
 
         /* Render current state */
-        double session_ms = ms_now_since(&g_session_start);
+        double session_ms = ms_since(&g_session_start);
         double session_s  = session_ms / 1000.0;
         double phase_ms   = 0;
         if (g_current_phase != MPHASE_NONE)

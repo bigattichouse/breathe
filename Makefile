@@ -19,7 +19,7 @@ DEPS = $(OBJS:.o=.d)
 
 TARGET = breathe
 
-TEST_BINS = tests/test_engine tests/test_audio tests/test_config tests/test_log tests/test_measure_stats
+TEST_BINS = tests/test_engine tests/test_audio tests/test_config tests/test_log tests/test_measure_stats tests/test_hardening
 
 .PHONY: all clean test
 
@@ -61,6 +61,9 @@ tests/test_log: tests/test_log.c src/log.c src/log.h tests/test_runner.h
 tests/test_measure_stats: tests/test_measure_stats.c src/measure.c src/measure.h tests/test_runner.h
 	$(CC) $(CFLAGS) -o $@ tests/test_measure_stats.c -lm
 
+tests/test_hardening: tests/test_hardening.c src/engine.c src/engine.h src/log.c src/log.h tests/test_runner.h
+	$(CC) $(CFLAGS) -o $@ tests/test_hardening.c -lm
+
 clean:
-	rm -rf $(OBJDIR) $(TARGET) tests/test_engine tests/test_audio tests/test_config tests/test_log tests/test_measure_stats
+	rm -rf $(OBJDIR) $(TARGET) tests/test_engine tests/test_audio tests/test_config tests/test_log tests/test_measure_stats tests/test_hardening
 	rm -f tests/*.d

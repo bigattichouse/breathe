@@ -4,9 +4,17 @@
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "engine.h"
+
+static int valid_config_name(const char *name)
+{
+    for (const char *p = name; *p; p++)
+        if (*p == '"' || *p == '\n' || *p == '\r' || *p == '=') return 0;
+    return strlen(name) > 0 && strlen(name) < 64;
+}
 
 static const char *config_path(void)
 {
@@ -77,6 +85,7 @@ int config_load(void)
 
 int config_save_engine(const char *name, const char *spec)
 {
+    if (!valid_config_name(name)) return -1;
     const char *path = config_path();
     FILE *f = fopen(path, "a");
     if (!f) return -1;
@@ -87,6 +96,7 @@ int config_save_engine(const char *name, const char *spec)
 
 int config_save_program(const char *name, const char *spec)
 {
+    if (!valid_config_name(name)) return -1;
     const char *path = config_path();
     FILE *f = fopen(path, "a");
     if (!f) return -1;
@@ -120,7 +130,11 @@ static int config_delete_entry(const char *directive, const char *name)
     }
     fclose(in);
     fclose(out);
-    return rename(tmppath, path);
+    if (rename(tmppath, path) != 0) {
+        unlink(tmppath);
+        return -1;
+    }
+    return 0;
 }
 
 int config_delete_engine(const char *name)

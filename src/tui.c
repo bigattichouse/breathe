@@ -9,6 +9,7 @@
 #include "audio.h"
 
 #define BAR_WIDTH 30
+#define TUI_BLOCK_LINES 4   /* header + phase + bar + help */
 
 /* ANSI helpers */
 #define RESET   "\033[0m"
@@ -149,10 +150,10 @@ void tui_render(PhaseType phase,
     printf("\r\033[K");
     printf("  space pause \xc2\xb7 s mute \xc2\xb7 q quit");
 
-    /* Move cursor back to top of our 4-line block.
-     * We printed 3 newlines (header, phase, bar) and left the help line
-     * without a trailing newline, so net movement is 3 lines down. */
-    printf("\033[3A\r");
+    /* Move cursor back to top of our TUI_BLOCK_LINES block.
+     * We printed (TUI_BLOCK_LINES-1) newlines and left the last line
+     * without a trailing newline, so net movement is (TUI_BLOCK_LINES-1) lines down. */
+    printf("\033[%dA\r", TUI_BLOCK_LINES - 1);
     fflush(stdout);
 }
 
@@ -163,10 +164,10 @@ void tui_summary(const char *preset_name,
                  int breaths,
                  const char *status)
 {
-    /* Position after our 4-line block.
+    /* Position after our TUI_BLOCK_LINES block.
      * Cursor is at line 0 of block after cleanup's \n moves us to line 1.
-     * Down 2 more lands on line 3 (help), then \n moves past it. */
-    printf("\033[2B\n");
+     * Down (TUI_BLOCK_LINES-2) more lands on the last line, then \n moves past it. */
+    printf("\033[%dB\n", TUI_BLOCK_LINES - 2);
     printf(RESET);
     printf("Session complete: %s\n", preset_name);
     int m = (int)(elapsed_s / 60);

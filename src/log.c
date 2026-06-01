@@ -5,6 +5,16 @@
 
 #include "log.h"
 
+static void sanitize_csv_field(char *dst, const char *src, size_t dstlen)
+{
+    size_t i = 0;
+    for (; src[i] && i < dstlen - 1; i++) {
+        char c = src[i];
+        dst[i] = (c == ',' || c == '"' || c == '\n' || c == '\r') ? '_' : c;
+    }
+    dst[i] = '\0';
+}
+
 static const char *log_path(void)
 {
     static char path[512];
@@ -50,8 +60,11 @@ void log_session(const char *preset,
     char ratio[16];
     snprintf(ratio, sizeof(ratio), "%d:%d", inhale_s, exhale_s);
 
+    char safe_preset[256];
+    sanitize_csv_field(safe_preset, preset, sizeof(safe_preset));
+
     fprintf(f, "%s,%s,%s,%s,%d,%d,%d,%.1f,%s\n",
-            date, tim, preset, ratio,
+            date, tim, safe_preset, ratio,
             duration_target_s, duration_actual_s,
             breaths, completion_pct, status);
 

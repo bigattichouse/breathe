@@ -11,8 +11,11 @@ typedef enum {
 
 extern SoundMode g_sound_mode;
 
-/* Find a suitable player binary; called once at startup */
+/* Find a suitable player binary; pre-generates tone WAV files; called once at startup */
 void audio_init(int no_sound_flag);
+
+/* Unlink pre-generated tone files; call from cleanup_and_exit */
+void audio_cleanup(void);
 
 /* Play a tone cue: phase_type 0=inhale, 1=exhale, 2=hold */
 void audio_play_cue(int phase_type);

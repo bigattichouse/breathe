@@ -35,6 +35,7 @@ static const char *skip_ws(const char *p)
 static void add_engine_builtin(const char *name, const char *desc,
                                Phase *phases, int count)
 {
+    if (g_engine_count >= MAX_ENGINES) return;
     Engine *e = &g_engines[g_engine_count++];
     memset(e, 0, sizeof(*e));
     strncpy(e->name,        name, sizeof(e->name)        - 1);
@@ -49,6 +50,7 @@ static void add_program_builtin(const char *name, const char *desc,
                                 int dur_min, int rounds,
                                 int *hold_targets, int htcount)
 {
+    if (g_program_count >= MAX_PROGRAMS) return;
     Program *p = &g_programs[g_program_count++];
     memset(p, 0, sizeof(*p));
     strncpy(p->name,        name,   sizeof(p->name)        - 1);
@@ -239,6 +241,7 @@ int engine_parse_spec(const char *spec, Phase *out, int max_phases)
                     while (*p && *p != ')') p++;
                     if (*p == ')') p++;
                 }
+                if (ph.value <= 0) ph.value = 5;
             } else if (strncasecmp(p, "count", 5) == 0) {
                 ph.dur_type = DUR_COUNT;
                 p += 5;
@@ -248,6 +251,7 @@ int engine_parse_spec(const char *spec, Phase *out, int max_phases)
                     while (*p && *p != ')') p++;
                     if (*p == ')') p++;
                 }
+                if (ph.value <= 0) ph.value = 1;
             } else {
                 int v = atoi(p);
                 while (*p && (isdigit((unsigned char)*p) || *p == '-')) p++;

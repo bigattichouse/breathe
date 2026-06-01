@@ -22,7 +22,7 @@
 
 static struct termios g_orig_termios;
 static int            g_raw_mode = 0;
-volatile int          g_interrupted = 0;
+volatile sig_atomic_t g_interrupted = 0;
 
 /* Session state (for signal handler) */
 static const char    *g_preset_name      = "unknown";
@@ -66,6 +66,7 @@ static void cleanup_and_exit(int complete)
 {
     term_restore();
     tui_cleanup();
+    audio_cleanup();
 
     const char *status = complete ? "complete" : "interrupted";
     tui_summary(g_preset_name, g_elapsed_s, g_breath_count, status);
@@ -121,33 +122,6 @@ typedef struct {
     const char *preset_name;
 } Session;
 
-/*
- * Compute progress (0..1) within a phase based on elapsed time and phase type.
- * For inhale: fills 0→1; for exhale: fills 1→0.
- * For rapid: simulates mini cycles.
- */
-static double phase_progress(PhaseType type, double elapsed, double duration)
-{
-    if (duration <= 0) return 0.0;
-    double t = elapsed / duration;
-    if (t < 0) t = 0;
-    if (t > 1) t = 1;
-
-    switch (type) {
-        case PHASE_INHALE: return t;
-        case PHASE_EXHALE: return 1.0 - t;
-        case PHASE_HOLD:   return 1.0;  /* stays full */
-        case PHASE_RAPID: {
-            /* Rapid: 1.5s inhale + 1.0s exhale = 2.5s cycle */
-            double cycle = 2.5;
-            double pos   = fmod(elapsed, cycle);
-            if (pos < 1.5) return pos / 1.5;
-            else           return 1.0 - ((pos - 1.5) / 1.0);
-        }
-        default: return 0.0;
-    }
-}
-
 static void run_session(Session *s)
 {
     int      phase_idx   = 0;
@@ -162,8 +136,6 @@ static void run_session(Session *s)
     double   extend_start = 0;
     double   extend_total = 0;
 
-    /* For audio: fire cue at start of each new phase */
-    int      cue_fired   = 0;
     int      last_rapid_cycle = 0;
 
     Engine  *e = s->engine;
@@ -175,7 +147,6 @@ static void run_session(Session *s)
     /* First cue */
     audio_play_cue((cur_phase->type == PHASE_INHALE) ? 0 :
                    (cur_phase->type == PHASE_EXHALE) ? 1 : 2);
-    cue_fired = 1;
 
     while (1) {
         /* Check signal */
@@ -196,7 +167,6 @@ static void run_session(Session *s)
                 cleanup_and_exit(0);
             } else if (ch == 's' || ch == 'S') {
                 audio_cycle_mode();
-                cue_fired = 0;  /* refire on next phase start */
             } else if (ch == ' ') {
                 if (paused) {
                     /* Resume: reset to inhale phase */
@@ -209,9 +179,7 @@ static void run_session(Session *s)
                     rapid_n        = 0;
                     extending      = 0;
                     extend_total   = 0;
-                    cue_fired      = 0;
                     audio_play_cue(0);
-                    cue_fired = 1;
                 } else {
                     /* Pause */
                     paused     = 1;
@@ -331,13 +299,11 @@ static void run_session(Session *s)
             last_rapid_cycle = 0;
             extending     = 0;
             extend_total  = 0;
-            cue_fired     = 0;
 
             /* Play cue for new phase */
             int cue_type = (cur_phase->type == PHASE_INHALE) ? 0 :
                            (cur_phase->type == PHASE_EXHALE) ? 1 : 2;
             audio_play_cue(cue_type);
-            cue_fired = 1;
         }
 
         /* Compute display values */
@@ -351,7 +317,7 @@ static void run_session(Session *s)
             if (remaining < 0) remaining = 0;
         }
 
-        double progress = phase_progress(cur_phase->type, phase_elapsed, phase_dur);
+        double progress = engine_phase_progress(cur_phase->type, phase_elapsed, phase_dur);
 
         int pulse_on = 1;
         if (cur_phase->type == PHASE_HOLD) {
@@ -369,8 +335,6 @@ static void run_session(Session *s)
                    s->preset_name,
                    s->inhale_s, s->exhale_s,
                    tstatus, pulse_on);
-
-        (void)cue_fired;
 
         struct timespec ts = { 0, 16000000L };  /* ~60fps */
         nanosleep(&ts, NULL);
@@ -404,23 +368,6 @@ static void usage(void)
     printf("      --delete-program NAME\n");
 }
 
-static int validate_inhale_exhale(int in, int ex)
-{
-    if (in < 3 || in > 10) {
-        fprintf(stderr, "Error: inhale must be 3-10 seconds\n");
-        return 0;
-    }
-    if (ex < 3 || ex > 10) {
-        fprintf(stderr, "Error: exhale must be 3-10 seconds\n");
-        return 0;
-    }
-    if (in + ex < 8) {
-        fprintf(stderr, "Error: inhale + exhale must be >= 8 seconds\n");
-        return 0;
-    }
-    return 1;
-}
-
 int main(int argc, char *argv[])
 {
     /* Initialize engine registry */
@@ -428,6 +375,13 @@ int main(int argc, char *argv[])
 
     /* Load user config */
     config_load();
+
+    /* Register signal handlers early — before any nanosleep or raw mode setup.
+     * SIGCHLD=SIG_IGN causes children to be auto-reaped (Linux), eliminating zombies.
+     * SIGINT handler must be set before the disclaimer sleep so Ctrl-C during
+     * that window goes through on_sigint rather than the default handler. */
+    signal(SIGCHLD, SIG_IGN);
+    signal(SIGINT, on_sigint);
 
     /* Default config */
     Config cfg;
@@ -477,7 +431,11 @@ int main(int argc, char *argv[])
             }
         } else if (strcmp(arg, "--ratio") == 0 && i + 1 < argc) {
             const char *ratio = argv[++i];
-            sscanf(ratio, "%d:%d", &cfg.ratio_in, &cfg.ratio_ex);
+            int matched = sscanf(ratio, "%d:%d", &cfg.ratio_in, &cfg.ratio_ex);
+            if (matched != 2) {
+                fprintf(stderr, "Error: --ratio must be IN:EX format (e.g. 4:6)\n");
+                return 1;
+            }
             cfg.ratio_set = 1;
         } else if (strcmp(arg, "--inhale") == 0 && i + 1 < argc) {
             cfg.inhale_s = atoi(argv[++i]);
@@ -545,14 +503,23 @@ int main(int argc, char *argv[])
 
     /* Validate inhale/exhale if set */
     if (cfg.ratio_set) {
-        if (!validate_inhale_exhale(cfg.ratio_in, cfg.ratio_ex)) return 1;
+        if (!engine_validate_ratio(cfg.ratio_in, cfg.ratio_ex)) {
+            fprintf(stderr, "Error: invalid ratio %d:%d "
+                    "(each must be 3-10, sum >= 8)\n",
+                    cfg.ratio_in, cfg.ratio_ex);
+            return 1;
+        }
         cfg.inhale_s = cfg.ratio_in;
         cfg.exhale_s = cfg.ratio_ex;
     }
     if (cfg.inhale_s > 0 || cfg.exhale_s > 0) {
         int in = cfg.inhale_s > 0 ? cfg.inhale_s : 5;
         int ex = cfg.exhale_s > 0 ? cfg.exhale_s : 5;
-        if (!validate_inhale_exhale(in, ex)) return 1;
+        if (!engine_validate_ratio(in, ex)) {
+            fprintf(stderr, "Error: invalid inhale/exhale values %d:%d "
+                    "(each must be 3-10, sum >= 8)\n", in, ex);
+            return 1;
+        }
         cfg.inhale_s = in;
         cfg.exhale_s = ex;
     }
@@ -563,7 +530,6 @@ int main(int argc, char *argv[])
             printf("Measure mode: use arrow keys to track breathing phases.\n");
             printf("Up=inhale  Down=exhale  Left/Right=hold  X or Enter=end\n\n");
         }
-        signal(SIGINT, on_sigint);
         term_raw();
         measure_run();
         term_restore();
@@ -652,9 +618,6 @@ int main(int argc, char *argv[])
 
     /* Audio init */
     audio_init(cfg.no_sound);
-
-    /* Setup signal handler */
-    signal(SIGINT, on_sigint);
 
     /* Enter raw mode and init TUI */
     term_raw();

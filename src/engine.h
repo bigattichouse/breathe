@@ -26,7 +26,7 @@ typedef struct {
 /* An engine is a named sequence of phases */
 typedef struct {
     char   name[64];
-    char   description[128];
+    char   description[512];
     Phase  phases[16];
     int    phase_count;
     int    is_builtin;  /* 1 = cannot be deleted */
@@ -35,7 +35,7 @@ typedef struct {
 /* A program ties an engine to a duration/rounds, with optional per-round targets */
 typedef struct {
     char   name[64];
-    char   description[128];
+    char   description[512];
     char   engine_name[64];
     int    duration_min;  /* 0 if rounds-based */
     int    rounds;        /* 0 if duration-based */
