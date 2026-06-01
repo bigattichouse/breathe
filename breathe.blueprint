@@ -1,0 +1,267 @@
+// breathe — terminal breathing guide for Linux
+// Origin: https://github.com/marekkowalczyk/breathe-cli
+// Language: C99, no external dependencies
+
+Program breathe {
+  description: "Terminal breathing guide: resonance, Tummo, box, and measure modes",
+  platform: Linux,
+  language: C99, no external dependencies,
+  origin: "https://github.com/marekkowalczyk/breathe-cli",
+  version: "1.0.0",
+
+  // ─────────────────────────────────────────
+  // PHASE PRIMITIVE
+  // ─────────────────────────────────────────
+
+  Phase {
+    type: inhale | exhale | hold | rapid,
+    duration:
+      fixed(seconds)      // countdown, auto-advance
+      | target(seconds)   // countdown, spacebar extends past target (count-up)
+      | user_held         // pure count-up, user releases key to advance
+      | count(n)          // for rapid: repeat n full cycles
+  }
+
+  // Exhale hold mechanic (used in Tummo):
+  //   - countdown runs to target, then auto-advances
+  //   - holding spacebar pauses auto-advance, switches display to count-up
+  //   - releasing spacebar advances immediately
+  //   NOTE: taps (key presses < ~300ms) are recorded but flagged — may be
+  //   accidental. Display briefly flashes phase color.
+
+  // ─────────────────────────────────────────
+  // BUILT-IN ENGINES
+  // ─────────────────────────────────────────
+
+  Engine {
+    // common interface for all breathing modes
+    callbacks: {
+      init(config)          -> EngineState,
+      tick(state, elapsed)  -> RenderFrame,
+      handle_input(state, key) -> Action,
+      summary(state)        -> SessionStats
+    }
+  }
+
+  BuiltinEngines {
+    resonance { sequence: [inhale:5, exhale:5] },
+    calm      { sequence: [inhale:4, exhale:6] },
+    extended  { sequence: [inhale:4, exhale:6] },
+    box       { sequence: [inhale:4, hold:4, exhale:4, hold:4] },
+    tummo     {
+      sequence: [rapid:count(30), hold:target(30), inhale:full, hold:15],
+      rounds: 3,
+      // hold target escalates per round: 30s → 60s → 90s
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // BUILT-IN PROGRAMS
+  // ─────────────────────────────────────────
+
+  BuiltinPrograms {
+    balanced { engine:resonance, duration:10m },
+    calm     { engine:calm,      duration:15m },
+    extended { engine:extended,  duration:20m },
+    box      { engine:box,       duration:10m },
+    tummo    { engine:tummo,     rounds:3 }
+  }
+
+  auto_preset: {
+    before_noon: balanced,
+    12:00-16:59: extended,
+    17:00+:      calm
+  }
+
+  // ─────────────────────────────────────────
+  // RATIO INPUT
+  // ─────────────────────────────────────────
+
+  ratio_input {
+    --ratio IN:EX             // e.g. --ratio 4:6
+    --inhale N                // inhale seconds (3–10)
+    --exhale N                // exhale seconds (3–10)
+    // --ratio and --inhale/--exhale are mutually exclusive
+    // if only --inhale or only --exhale given, other defaults to 5
+    // box breathing: --ratio IN:HOLD_IN:EX:HOLD_EX
+    constraints: [
+      inhale in [3..10],
+      exhale in [3..10],
+      inhale + exhale >= 8
+    ]
+  }
+
+  // ─────────────────────────────────────────
+  // SAFETY
+  // ─────────────────────────────────────────
+
+  safety_constraints: [
+    resonance/box: minimum cycle >= 8 seconds,
+    resonance/box: 2-part ratios (no breath holds in custom resonance),
+    tummo/box: --safety flag prints full cardiac/respiratory warnings,
+    --quiet: suppresses startup disclaimer
+  ]
+
+  // ─────────────────────────────────────────
+  // AUDIO
+  // ─────────────────────────────────────────
+
+  audio {
+    tones: {
+      inhale: ~800 Hz sine, ~100ms, WAV written to /tmp,
+      exhale: ~400 Hz sine, ~100ms, WAV written to /tmp
+    },
+    playback_priority: [paplay, aplay, terminal bell (\a)],
+    volume: 30% (WAV amplitude scaled),
+    --no-sound / -n: suppress all audio including bell,
+    runtime_toggle: s key cycles → sound → bell-only → silent,
+    status_indicator: shows 🔇 when muted/silent
+  }
+
+  // ─────────────────────────────────────────
+  // TUI
+  // ─────────────────────────────────────────
+
+  tui {
+    implementation: direct ANSI escape codes + termios raw mode (no ncurses),
+    terminal_state: save/restore cursor and input mode on all exit paths,
+
+    guided_layout: """
+      preset · ratio · countdown  [status]
+           PHASE
+      ████████████████░░░░░░░░░░░░░░
+      space pause · s mute · q quit
+    """,
+
+    bar_behavior: {
+      inhale:     fills left→right, cyan,
+      exhale:     drains right→left, green,
+      hold:       full or empty, pulses gently,
+      rapid:      fast fill/drain cycle
+    },
+
+    pause_behavior: {
+      on_pause:  freeze countdown,
+      on_resume: reset to start of inhale phase,
+      indicator: ‖ shown in header
+    },
+
+    controls: {
+      space:  pause/resume,
+      s:      cycle audio mode,
+      q:      quit,
+      ctrl+c: quit
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // MEASURE MODE
+  // ─────────────────────────────────────────
+
+  MeasureMode {
+    description: "User-driven breathing recorder — observe and log natural breath capacity",
+    flag: --measure / -m,
+
+    input: {
+      ↑ held:       inhale phase (release = end phase),
+      ↓ held:       exhale phase (release = end phase),
+      ← or → held:  hold phase (release = end phase),
+      X or Enter:   end session → show summary,
+      Ctrl-C:       end session → show summary
+    },
+
+    tui: {
+      current_phase: {
+        label:  "INHALE / EXHALE / HOLD",
+        bar:    grows while key held,
+        timer:  count-up showing current phase duration
+      },
+      history: scrolling list of completed phases,
+               format: "  inhale  4.2s"
+                       "  exhale  5.1s"
+                       "  hold    2.3s",
+      live_stats: [avg_inhale, avg_exhale, avg_hold, breath_count, bpm]
+    },
+
+    end_summary: {
+      total_time, breath_count, bpm,
+      inhale: min/avg/max,
+      exhale: min/avg/max,
+      hold:   min/avg/max,
+      ratio:  avg inhale:exhale
+    },
+
+    // use case: track inhale capacity, hold duration, exhale length over weeks
+  }
+
+  // ─────────────────────────────────────────
+  // LOGGING
+  // ─────────────────────────────────────────
+
+  logging {
+    guided_sessions: {
+      path: ~/.breathe_log.csv,
+      columns: [date, time, preset, ratio, duration_target_s, duration_actual_s,
+                breaths, completion_pct, status],
+      flags: { --no-log: skip, --log: print path and exit }
+    },
+    measurements: {
+      path: ~/.breathe_measurements.csv,
+      columns: [date, time, session_id, phase, duration_ms, flagged_tap],
+      // flagged_tap: true if duration < 300ms
+      // enables long-term capability review over time
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // USER CONFIG
+  // ─────────────────────────────────────────
+
+  config {
+    path: ~/.breatherc,
+    syntax: {
+      engine  "name" = phase:dur, phase:dur, ...
+      program "name" = engine:name rounds:n duration:Nm, ...
+    },
+    examples: {
+      engine "478"     = inhale:4, hold:7, exhale:8
+      engine "box55"   = inhale:5, hold:5, exhale:5, hold:5
+      program "morning" = resonance rounds:1 duration:5m, tummo rounds:3, resonance duration:5m
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // CLI FLAGS
+  // ─────────────────────────────────────────
+
+  flags {
+    // session
+    --preset / -p NAME       // use named preset or program
+    --duration / -d MINUTES  // session length (1–60)
+    --ratio IN:EX            // breath ratio
+    --inhale N               // inhale seconds
+    --exhale N               // exhale seconds
+
+    // audio
+    --no-sound / -n          // silence all audio
+
+    // output
+    --quiet / -q             // suppress startup warnings
+    --no-log                 // skip logging this session
+    --log                    // print guided log path and exit
+    --measure / -m           // enter measure mode
+
+    // info
+    --safety                 // print safety information and exit
+    --list                   // list all engines and programs
+    --list-engines           // engines only
+    --list-programs          // programs only
+    --version                // display version
+
+    // config management
+    --create-engine  "name" "sequence"   // creates or replaces
+    --create-program "name" "sequence"   // creates or replaces
+    --delete-engine  "name"
+    --delete-program "name"
+  }
+}
