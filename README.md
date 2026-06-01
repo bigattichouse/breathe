@@ -112,3 +112,7 @@ make test     # run all tests
 ```
 
 Requires a C99 compiler and `libc` with POSIX extensions. No other dependencies.
+
+## Credits
+
+Based on [breathe-cli](https://github.com/marekkowalczyk/breathe-cli) by Marek Kowalczyk.
