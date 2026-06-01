@@ -1,6 +1,6 @@
-CC      = gcc
-CFLAGS  = -std=c99 -Wall -Wextra -O2 -Isrc -Itests
-LDFLAGS = -lm
+CC       = gcc
+CFLAGS   = -std=c99 -Wall -Wextra -O2 -Isrc -Itests -MMD -MP
+LDFLAGS  = -lm
 
 SRCDIR  = src
 OBJDIR  = obj
@@ -14,6 +14,8 @@ SRCS = $(SRCDIR)/main.c    \
        $(SRCDIR)/measure.c
 
 OBJS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SRCS))
+DEPS = $(OBJS:.o=.d)
+-include $(DEPS)
 
 TARGET = breathe
 
@@ -61,3 +63,4 @@ tests/test_measure_stats: tests/test_measure_stats.c src/measure.c src/measure.h
 
 clean:
 	rm -rf $(OBJDIR) $(TARGET) tests/test_engine tests/test_audio tests/test_config tests/test_log tests/test_measure_stats
+	rm -f tests/*.d
