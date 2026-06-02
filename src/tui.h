@@ -40,7 +40,10 @@ void tui_render(PhaseType   phase,
                 int         exhale_s,
                 TuiStatus   status,
                 int         pulse_on,
-                const char *hint);
+                const char *hint,
+                int         exhale_hold,
+                int         last_breath,
+                int         exhale_warning);
 
 /* Print end-of-session summary */
 void tui_summary(const char *preset_name,

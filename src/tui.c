@@ -17,6 +17,7 @@
 #define GREEN   "\033[32m"
 #define YELLOW  "\033[33m"
 #define MAGENTA "\033[35m"
+#define BLUE    "\033[34m"
 #define DIM     "\033[2m"
 #define BOLD    "\033[1m"
 
@@ -42,14 +43,19 @@ void tui_cleanup(void)
 /* ----------------------------------------------------------------- bar draw */
 
 static void draw_bar(PhaseType phase, double progress, int pulse_on,
-                     int rapid_n, int rapid_total)
+                     int rapid_n, int rapid_total, int exhale_hold, int last_breath,
+                     int exhale_warning)
 {
     const char *color;
     switch (phase) {
         case PHASE_INHALE: color = CYAN;    break;
         case PHASE_EXHALE: color = GREEN;   break;
-        case PHASE_HOLD:   color = YELLOW;  break;
-        case PHASE_RAPID:  color = MAGENTA; break;
+        case PHASE_HOLD:
+            if (exhale_warning)      color = GREEN;
+            else if (exhale_hold)    color = BLUE;
+            else                     color = YELLOW;
+            break;
+        case PHASE_RAPID:  color = last_breath ? YELLOW : MAGENTA; break;
         default:           color = RESET;   break;
     }
 
@@ -96,7 +102,10 @@ void tui_render(PhaseType   phase,
                 int         exhale_s,
                 TuiStatus   status,
                 int         pulse_on,
-                const char *hint)
+                const char *hint,
+                int         exhale_hold,
+                int         last_breath,
+                int         exhale_warning)
 {
     /* Time display */
     int elapsed_min = (int)(elapsed_total_s / 60);
@@ -115,11 +124,15 @@ void tui_render(PhaseType   phase,
     /* Phase label */
     const char *phase_label;
     switch (phase) {
-        case PHASE_INHALE: phase_label = "INHALE"; break;
-        case PHASE_EXHALE: phase_label = "EXHALE"; break;
-        case PHASE_HOLD:   phase_label = "HOLD";   break;
-        case PHASE_RAPID:  phase_label = "RAPID";  break;
-        default:           phase_label = "";        break;
+        case PHASE_INHALE: phase_label = "INHALE";   break;
+        case PHASE_EXHALE: phase_label = "EXHALE";   break;
+        case PHASE_HOLD:
+            if (exhale_warning)   phase_label = "EXHALE";
+            else if (exhale_hold) phase_label = "HOLD OUT";
+            else                  phase_label = "HOLD";
+            break;
+        case PHASE_RAPID:  phase_label = last_breath ? "EXHALE!" : "RAPID";  break;
+        default:           phase_label = "";          break;
     }
 
     /* Remaining time display */
@@ -144,7 +157,8 @@ void tui_render(PhaseType   phase,
 
     /* Bar line */
     printf("\r\033[K");
-    draw_bar(phase, progress, pulse_on, rapid_n, rapid_total);
+    draw_bar(phase, progress, pulse_on, rapid_n, rapid_total, exhale_hold, last_breath,
+             exhale_warning);
     printf("\n");
 
     /* Hint line */
@@ -155,7 +169,14 @@ void tui_render(PhaseType   phase,
 
     /* Help line */
     printf("\r\033[K");
-    printf("  space pause \xc2\xb7 s mute \xc2\xb7 q quit");
+    if (status == TUI_STATUS_PAUSED) {
+        if (phase == PHASE_HOLD && remaining_s < 0)
+            printf("  space when done \xc2\xb7 s mute \xc2\xb7 q quit");
+        else
+            printf("  space resume \xc2\xb7 s mute \xc2\xb7 q quit");
+    } else {
+        printf("  space pause \xc2\xb7 s mute \xc2\xb7 q quit");
+    }
 
     /* Move cursor back to top of our TUI_BLOCK_LINES block.
      * We printed (TUI_BLOCK_LINES-1) newlines and left the last line

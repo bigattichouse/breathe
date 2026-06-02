@@ -57,6 +57,27 @@ Each engine carries per-phase technique hints shown dimmed below the progress ba
 - `tummo` rapid phase: mouth breathing, belly pump
 - User-defined engines: no hint shown
 
+### Phase transitions
+
+In the last 2 seconds of any hold-after-inhale (e.g. box breathing's inhale hold, Tummo's
+15s inhale hold), the label changes from **HOLD** → **EXHALE** and the bar turns green,
+giving a clear cue to begin exhaling.
+
+### Pausing during a hold extension
+
+For `tummo`-style holds the timer runs past its target and shows `+Xs` until you are ready
+to continue. Space always pauses; a second space advances:
+
+| State                           | Press space       |
+|---------------------------------|-------------------|
+| Counting down                   | Pause             |
+| Paused (counting down)          | Resume            |
+| Extension (`+Xs`, not paused)   | Pause (freeze display) |
+| Paused during extension         | Advance (end hold) |
+
+The help line reflects the current action: **space resume**, **space pause**, or
+**space when done**.
+
 ## Options
 
 ```

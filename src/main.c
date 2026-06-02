@@ -132,9 +132,10 @@ static void run_session(Session *s)
     int      paused      = 0;
     double   pause_start = 0;
     double   total_pause = 0;
-    int      extending   = 0;          /* spacebar held in DUR_TARGET */
-    double   extend_start = 0;
-    double   extend_total = 0;
+    int      hold_count_up_paused = 0; /* paused while in DUR_TARGET +time mode */
+    double   hold_at_target_time = -1.0; /* mono time when hold first hit phase_dur */
+    double   extend_start = 0.0;         /* = phase_start + phase_dur, for count-up display */
+    PhaseType prev_phase_type = PHASE_INHALE;
 
     int      last_rapid_cycle = 0;
 
@@ -158,6 +159,12 @@ static void run_session(Session *s)
         double session_elapsed = (now - session_start) - total_pause;
         g_elapsed_s = session_elapsed;
 
+        /* phase_elapsed needed by both key handler and advance logic */
+        double phase_elapsed = (now - phase_start);
+
+        /* space_advance: set when user presses space during a DUR_TARGET hold count-up */
+        int space_advance = 0;
+
         /* Key handling */
         char keybuf[8];
         int  kn = read_key(keybuf, sizeof(keybuf));
@@ -168,94 +175,124 @@ static void run_session(Session *s)
             } else if (ch == 's' || ch == 'S') {
                 audio_cycle_mode();
             } else if (ch == ' ') {
+                int in_count_up = (cur_phase->type == PHASE_HOLD &&
+                                   cur_phase->dur_type == DUR_TARGET &&
+                                   hold_at_target_time >= 0.0);
                 if (paused) {
-                    /* Resume: reset to inhale phase */
-                    paused         = 0;
-                    total_pause   += now - pause_start;
-                    phase_idx      = 0;
-                    cur_phase      = &e->phases[0];
-                    phase_dur      = (double)cur_phase->value;
-                    phase_start    = now;
-                    rapid_n        = 0;
-                    extending      = 0;
-                    extend_total   = 0;
-                    audio_play_cue(0);
-                } else {
-                    /* Pause */
-                    paused     = 1;
-                    pause_start = now;
-                }
-            }
-
-            /* Spacebar hold for DUR_TARGET extension */
-            if (!paused && cur_phase->dur_type == DUR_TARGET) {
-                /* In raw mode spacebar press/release can't be tracked
-                   directly; we use space as a toggle for extending */
-                if (ch == ' ' && !paused) {
-                    if (!extending) {
-                        extending    = 1;
-                        extend_start = now;
+                    /* Resume from current position (shift phase_start by pause duration) */
+                    double pause_dur = now - pause_start;
+                    paused      = 0;
+                    total_pause += pause_dur;
+                    phase_start += pause_dur;
+                    if (hold_at_target_time >= 0.0)
+                        extend_start += pause_dur;
+                    /* If we paused while in +time, this resume also ends the hold */
+                    if (hold_count_up_paused) {
+                        space_advance = 1;
+                        hold_count_up_paused = 0;
                     }
+                } else if (in_count_up) {
+                    /* Pause during +time so the display freezes; next space will advance */
+                    paused = 1;
+                    pause_start = now;
+                    hold_count_up_paused = 1;
+                } else {
+                    /* Normal pause */
+                    paused      = 1;
+                    pause_start = now;
                 }
             }
         }
 
         if (paused) {
-            /* Still render paused state */
+            /* Render frozen state at the moment of pausing */
             int pulse_on = ((int)(now * 2) % 2) == 0;
-            double remaining = phase_dur - (phase_start - session_start);
-            tui_render(cur_phase->type, 1.0, remaining,
-                       rapid_n, cur_phase->type == PHASE_RAPID ? cur_phase->value : 0,
+            double phase_elapsed_frozen = pause_start - phase_start;
+            double remaining;
+            if (hold_at_target_time >= 0.0) {
+                remaining = -(phase_elapsed_frozen - phase_dur); /* count-up frozen */
+            } else {
+                remaining = phase_dur - phase_elapsed_frozen;
+                if (remaining < 0) remaining = 0;
+            }
+            double progress_frozen = engine_phase_progress(
+                cur_phase->type, phase_elapsed_frozen, phase_dur);
+            int exhale_hold = (cur_phase->type == PHASE_HOLD &&
+                               (prev_phase_type == PHASE_EXHALE ||
+                                prev_phase_type == PHASE_RAPID));
+            int r_total_p = (cur_phase->type == PHASE_RAPID) ? cur_phase->value : 0;
+            int last_breath_p = (cur_phase->type == PHASE_RAPID &&
+                                 r_total_p > 0 && rapid_n >= r_total_p - 1);
+            int exhale_warning_p = (cur_phase->type == PHASE_HOLD && !exhale_hold &&
+                                    (remaining <= 2.0 || hold_at_target_time >= 0.0));
+            const char *hint_p = e->phase_hints[cur_phase->type];
+            if (last_breath_p)
+                hint_p = "Exhale through the nose, prepare to hold...";
+            else if (exhale_warning_p)
+                hint_p = "Begin your exhale...";
+            tui_render(cur_phase->type, progress_frozen, remaining,
+                       rapid_n, r_total_p,
                        session_elapsed,
                        s->duration_s,
                        s->preset_name,
                        s->inhale_s, s->exhale_s,
                        TUI_STATUS_PAUSED, pulse_on,
-                       e->phase_hints[cur_phase->type]);
+                       hint_p, exhale_hold, last_breath_p, exhale_warning_p);
 
             struct timespec ts = { 0, 16000000L };
             nanosleep(&ts, NULL);
             continue;
         }
 
-        double phase_elapsed = (now - phase_start);
-
         /* Phase advance logic */
         int advance_phase = 0;
 
-        switch (cur_phase->dur_type) {
-            case DUR_FIXED:
-                if (phase_elapsed >= phase_dur)
-                    advance_phase = 1;
-                break;
-
-            case DUR_TARGET:
-                /* count down to target; if extending, don't auto-advance */
-                if (!extending && phase_elapsed >= phase_dur)
-                    advance_phase = 1;
-                break;
-
-            case DUR_USER_HELD:
-                /* advance when user releases key (handled via spacebar) */
-                break;
-
-            case DUR_COUNT:
-                /* RAPID: count breaths */
-                if (cur_phase->type == PHASE_RAPID) {
-                    double cycle_s  = 2.5;
-                    int    cycle_n  = (int)(phase_elapsed / cycle_s);
-                    if (cycle_n != last_rapid_cycle) {
-                        last_rapid_cycle = cycle_n;
-                        rapid_n = cycle_n;
-                    }
-                    if (rapid_n >= cur_phase->value)
-                        advance_phase = 1;
+        if (cur_phase->type == PHASE_HOLD) {
+            if (phase_elapsed >= phase_dur) {
+                /* First frame at target: record and set up count-up display */
+                if (hold_at_target_time < 0.0) {
+                    hold_at_target_time = now;
+                    extend_start        = phase_start + phase_dur;
                 }
-                break;
+                if (cur_phase->dur_type == DUR_TARGET) {
+                    /* Manual-advance: user presses space when ready */
+                    if (space_advance) advance_phase = 1;
+                } else {
+                    /* DUR_FIXED hold: auto-advance at target */
+                    advance_phase = 1;
+                }
+            }
+        } else {
+            switch (cur_phase->dur_type) {
+                case DUR_FIXED:
+                case DUR_TARGET:
+                    if (phase_elapsed >= phase_dur)
+                        advance_phase = 1;
+                    break;
+
+                case DUR_USER_HELD:
+                    break;
+
+                case DUR_COUNT:
+                    if (cur_phase->type == PHASE_RAPID) {
+                        double cycle_s  = 3.5;
+                        int    cycle_n  = (int)(phase_elapsed / cycle_s);
+                        if (cycle_n != last_rapid_cycle) {
+                            last_rapid_cycle = cycle_n;
+                            rapid_n = cycle_n;
+                        }
+                        if (rapid_n >= cur_phase->value)
+                            advance_phase = 1;
+                    }
+                    break;
+            }
         }
 
         if (advance_phase) {
-            /* Handle per-round hold targets for tummo */
+            prev_phase_type      = cur_phase->type;
+            hold_at_target_time  = -1.0;
+            hold_count_up_paused = 0;
+
             phase_idx++;
             if (phase_idx >= e->phase_count) {
                 phase_idx = 0;
@@ -298,8 +335,6 @@ static void run_session(Session *s)
             phase_elapsed = 0.0;
             rapid_n       = 0;
             last_rapid_cycle = 0;
-            extending     = 0;
-            extend_total  = 0;
 
             /* Play cue for new phase */
             int cue_type = (cur_phase->type == PHASE_INHALE) ? 0 :
@@ -309,10 +344,8 @@ static void run_session(Session *s)
 
         /* Compute display values */
         double remaining;
-        if (cur_phase->dur_type == DUR_TARGET && extending) {
-            /* show +Ns count-up since target reached */
-            extend_total = (now - extend_start);
-            remaining    = -extend_total;
+        if (hold_at_target_time >= 0.0) {
+            remaining = -(now - extend_start);  /* count-up: "+0s", "+1s", ... */
         } else {
             remaining = phase_dur - phase_elapsed;
             if (remaining < 0) remaining = 0;
@@ -329,6 +362,18 @@ static void run_session(Session *s)
         if (g_sound_mode == SOUND_OFF) tstatus = TUI_STATUS_MUTED;
 
         int r_total = (cur_phase->type == PHASE_RAPID) ? cur_phase->value : 0;
+        int exhale_hold = (cur_phase->type == PHASE_HOLD &&
+                           (prev_phase_type == PHASE_EXHALE ||
+                            prev_phase_type == PHASE_RAPID));
+        int last_breath = (cur_phase->type == PHASE_RAPID &&
+                           r_total > 0 && rapid_n >= r_total - 1);
+        int exhale_warning = (cur_phase->type == PHASE_HOLD && !exhale_hold &&
+                              (remaining <= 2.0 || hold_at_target_time >= 0.0));
+        const char *hint = e->phase_hints[cur_phase->type];
+        if (last_breath)
+            hint = "Exhale through the nose, prepare to hold...";
+        else if (exhale_warning)
+            hint = "Begin your exhale...";
 
         tui_render(cur_phase->type, progress, remaining,
                    rapid_n, r_total,
@@ -336,7 +381,7 @@ static void run_session(Session *s)
                    s->preset_name,
                    s->inhale_s, s->exhale_s,
                    tstatus, pulse_on,
-                   e->phase_hints[cur_phase->type]);
+                   hint, exhale_hold, last_breath, exhale_warning);
 
         struct timespec ts = { 0, 16000000L };  /* ~60fps */
         nanosleep(&ts, NULL);
@@ -618,8 +663,8 @@ int main(int argc, char *argv[])
         nanosleep(&ts, NULL);
     }
 
-    /* Audio init */
-    audio_init(cfg.no_sound);
+    /* Audio init: --quiet suppresses sounds just like --no-sound */
+    audio_init(cfg.no_sound || cfg.quiet);
 
     /* Enter raw mode and init TUI */
     term_raw();
