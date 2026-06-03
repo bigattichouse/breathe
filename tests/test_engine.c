@@ -236,14 +236,14 @@ int main(void)
                 "hold always 1.0");
     ASSERT_NEAR(engine_phase_progress(PHASE_RAPID, 0.0,  10.0), 0.0,    1e-9,
                 "rapid t=0 progress 0.0");
-    ASSERT_NEAR(engine_phase_progress(PHASE_RAPID, 0.75, 10.0), 0.5,    1e-6,
-                "rapid t=0.75 mid-inhale 0.5");
-    ASSERT_NEAR(engine_phase_progress(PHASE_RAPID, 1.5,  10.0), 1.0,    1e-9,
-                "rapid t=1.5 peak 1.0");
-    ASSERT_NEAR(engine_phase_progress(PHASE_RAPID, 2.0,  10.0), 0.5,    1e-9,
-                "rapid t=2.0 mid-exhale 0.5");
-    ASSERT_NEAR(engine_phase_progress(PHASE_RAPID, 2.5,  10.0), 0.0,    1e-9,
-                "rapid t=2.5 end-of-cycle 0.0");
+    ASSERT_NEAR(engine_phase_progress(PHASE_RAPID, 1.0,  10.0), 0.5,    1e-6,
+                "rapid t=1.0 mid-inhale 0.5");
+    ASSERT_NEAR(engine_phase_progress(PHASE_RAPID, 2.0,  10.0), 1.0,    1e-9,
+                "rapid t=2.0 peak 1.0");
+    ASSERT_NEAR(engine_phase_progress(PHASE_RAPID, 2.75, 10.0), 0.5,    1e-9,
+                "rapid t=2.75 mid-exhale 0.5");
+    ASSERT_NEAR(engine_phase_progress(PHASE_RAPID, 3.5,  10.0), 0.0,    1e-9,
+                "rapid t=3.5 end-of-cycle 0.0");
 
     TEST_RESULTS();
 }

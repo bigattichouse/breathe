@@ -501,10 +501,10 @@ double engine_phase_progress(PhaseType type, double elapsed, double duration)
         case PHASE_EXHALE: return 1.0 - t;
         case PHASE_HOLD:   return 1.0;
         case PHASE_RAPID: {
-            double cycle = 2.5;
+            double cycle = 3.5;
             double pos = fmod(elapsed, cycle);
-            if (pos < 1.5) return pos / 1.5;
-            else           return 1.0 - ((pos - 1.5) / 1.0);
+            if (pos < 2.0) return pos / 2.0;
+            else           return 1.0 - ((pos - 2.0) / 1.5);
         }
         default: return 0.0;
     }
