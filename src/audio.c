@@ -13,10 +13,9 @@
 
 #include "audio.h"
 
-SoundMode g_sound_mode = SOUND_ON;
+SoundMode g_sound_mode = SOUND_BELL;
 
-static char g_notifier[256] = ""; /* path to notify-send or dunstify */
-static char g_player[256]   = ""; /* path to paplay or aplay */
+static char g_player[256] = ""; /* path to paplay or aplay */
 
 /* Pre-generated tone file paths: [0]=inhale 800Hz, [1]=exhale 400Hz, [2]=hold 600Hz */
 static char g_tone_files[3][64];
@@ -126,6 +125,11 @@ static int write_tone_file(double freq_hz, char *dst, size_t dst_len)
 
 /* ------------------------------------------------------------------ player */
 
+/*
+ * Default mode is terminal bell (safe over SSH — the \a travels through the
+ * connection and rings on the local terminal).  Pass force_sound_flag=1 via
+ * --sound to opt into WAV audio via aplay/paplay instead.
+ */
 void audio_init(int no_sound_flag, int force_sound_flag)
 {
     if (no_sound_flag) {
@@ -133,29 +137,9 @@ void audio_init(int no_sound_flag, int force_sound_flag)
         return;
     }
 
-    /* Try desktop notifier unless user forced WAV audio */
-    if (!force_sound_flag) {
-        const char *notifiers[] = {
-            "/usr/bin/notify-send",
-            "/bin/notify-send",
-            "/usr/local/bin/notify-send",
-            "/usr/bin/dunstify",
-            NULL
-        };
-        int i;
-        for (i = 0; notifiers[i]; i++) {
-            if (access(notifiers[i], X_OK) == 0) {
-                strncpy(g_notifier, notifiers[i], sizeof(g_notifier) - 1);
-                break;
-            }
-        }
-        if (g_notifier[0] != '\0') {
-            g_sound_mode = SOUND_NOTIFY;
-            return;
-        }
-    }
+    if (!force_sound_flag) return; /* default: terminal bell, no player needed */
 
-    /* WAV player (default fallback or forced by --sound) */
+    /* --sound: find a WAV player */
     const char *players[] = {
         "/usr/bin/paplay",
         "/usr/bin/aplay",
@@ -170,10 +154,7 @@ void audio_init(int no_sound_flag, int force_sound_flag)
         }
     }
 
-    if (g_player[0] == '\0') {
-        g_sound_mode = SOUND_BELL;
-        return;
-    }
+    if (g_player[0] == '\0') return; /* no player found; stay with bell */
 
     /* Pre-generate tone files: inhale=800Hz, exhale=400Hz, hold=600Hz */
     double freqs[3] = { 800.0, 400.0, 600.0 };
@@ -191,10 +172,10 @@ void audio_init(int no_sound_flag, int force_sound_flag)
                 g_tone_files[i][0] = '\0';
             }
         }
-        g_sound_mode = SOUND_BELL;
-        return;
+        return; /* stay with bell */
     }
     g_tones_ready = 1;
+    g_sound_mode = SOUND_ON;
 }
 
 void audio_cleanup(void)
@@ -212,27 +193,6 @@ void audio_cleanup(void)
 void audio_play_cue(int phase_type)
 {
     if (g_sound_mode == SOUND_OFF) return;
-
-    if (g_sound_mode == SOUND_NOTIFY) {
-        const char *labels[] = { "Inhale", "Exhale", "Hold" };
-        int idx = (phase_type == 0) ? 0 : (phase_type == 1) ? 1 : 2;
-        if (g_notifier[0] == '\0') {
-            if (write(STDOUT_FILENO, "\a", 1) < 0) { /* ignore */ }
-            return;
-        }
-        pid_t pid = fork();
-        if (pid == 0) {
-            int devnull = open("/dev/null", O_WRONLY);
-            if (devnull >= 0) {
-                dup2(devnull, STDOUT_FILENO);
-                dup2(devnull, STDERR_FILENO);
-                close(devnull);
-            }
-            execl(g_notifier, g_notifier, "breathe", labels[idx], (char*)NULL);
-            _exit(1);
-        }
-        return;
-    }
 
     if (g_sound_mode == SOUND_BELL || g_player[0] == '\0') {
         if (write(STDOUT_FILENO, "\a", 1) < 0) { /* ignore */ }
@@ -265,20 +225,17 @@ void audio_play_cue(int phase_type)
 
 void audio_cycle_mode(void)
 {
-    if (g_sound_mode == SOUND_ON)
-        g_sound_mode = SOUND_NOTIFY;
-    else if (g_sound_mode == SOUND_NOTIFY)
-        g_sound_mode = SOUND_BELL;
-    else if (g_sound_mode == SOUND_BELL)
+    if (g_sound_mode == SOUND_BELL)
+        g_sound_mode = SOUND_ON;
+    else if (g_sound_mode == SOUND_ON)
         g_sound_mode = SOUND_OFF;
     else
-        g_sound_mode = SOUND_ON;
+        g_sound_mode = SOUND_BELL;
 }
 
 const char *audio_mode_label(void)
 {
-    if (g_sound_mode == SOUND_NOTIFY) return "notify";
-    if (g_sound_mode == SOUND_ON)     return "sound";
-    if (g_sound_mode == SOUND_BELL)   return "bell";
+    if (g_sound_mode == SOUND_ON)   return "sound";
+    if (g_sound_mode == SOUND_BELL) return "bell";
     return "silent";
 }

@@ -87,7 +87,7 @@ The help line reflects the current action: **space resume**, **space pause**, or
     --inhale SECS      Custom inhale duration
     --exhale SECS      Custom exhale duration
 -n, --no-sound         Disable all cues
-    --sound            Use WAV audio (aplay/paplay) instead of notifications
+    --sound            Use WAV audio via aplay/paplay (default is terminal bell)
 -q, --quiet            Suppress TUI (plain output)
     --no-log           Do not write to session log
 -m, --measure          Measure mode: tap spacebar to record your own rhythm
@@ -133,9 +133,9 @@ make          # build ./breathe
 make test     # run all tests
 ```
 
-Requires a C99 compiler and `libc` with POSIX extensions.
+Requires a C99 compiler and `libc` with POSIX extensions. No other dependencies.
 
-Phase-transition cues use `notify-send` (or `dunstify`) when available — no extra setup needed, they are standard on most Linux desktops. Fall-back order: desktop notification → WAV audio (`aplay`/`paplay`) → terminal bell. Pass `--sound` to force WAV audio, or `-n` / `--no-sound` for silence.
+Phase-transition cues default to terminal bell (`\a`), which works correctly over SSH (the bell travels through the connection and rings on your local terminal). Pass `--sound` to use WAV audio via `aplay`/`paplay` instead — useful for local sessions where you want distinct tones per phase.
 
 ## Credits
 

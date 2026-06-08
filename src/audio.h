@@ -4,16 +4,14 @@
 #include <stddef.h>
 
 typedef enum {
-    SOUND_NOTIFY,   /* desktop notification via notify-send/dunstify */
-    SOUND_ON,       /* play WAV via paplay/aplay */
-    SOUND_BELL,     /* terminal bell only */
+    SOUND_BELL,     /* terminal bell \a — default, safe over SSH */
+    SOUND_ON,       /* play WAV via paplay/aplay (--sound) */
     SOUND_OFF       /* silence */
 } SoundMode;
 
 extern SoundMode g_sound_mode;
 
-/* Detect notifier/player; pre-generates tone WAV files; called once at startup.
- * force_sound_flag: skip notify-send and go straight to aplay/paplay */
+/* Default mode is terminal bell. force_sound_flag (--sound) opts into WAV via aplay/paplay. */
 void audio_init(int no_sound_flag, int force_sound_flag);
 
 /* Unlink pre-generated tone files; call from cleanup_and_exit */
