@@ -400,6 +400,7 @@ static void usage(void)
     printf("      --inhale N             Inhale seconds (3-10)\n");
     printf("      --exhale N             Exhale seconds (3-10)\n");
     printf("  -n, --no-sound             Disable audio cues\n");
+    printf("      --sound                Use WAV audio (aplay/paplay) instead of notifications\n");
     printf("  -q, --quiet                Skip startup disclaimer\n");
     printf("      --no-log               Don't write to session log\n");
     printf("      --log                  Print log path and exit\n");
@@ -458,6 +459,8 @@ int main(int argc, char *argv[])
         } else if (strcmp(arg, "--no-sound") == 0 ||
                    strcmp(arg, "-n") == 0) {
             cfg.no_sound = 1;
+        } else if (strcmp(arg, "--sound") == 0) {
+            cfg.use_sound = 1;
         } else if (strcmp(arg, "--quiet") == 0 ||
                    strcmp(arg, "-q") == 0) {
             cfg.quiet = 1;
@@ -664,7 +667,7 @@ int main(int argc, char *argv[])
     }
 
     /* Audio init: --quiet suppresses sounds just like --no-sound */
-    audio_init(cfg.no_sound || cfg.quiet);
+    audio_init(cfg.no_sound || cfg.quiet, cfg.use_sound);
 
     /* Enter raw mode and init TUI */
     term_raw();

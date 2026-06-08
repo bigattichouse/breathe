@@ -8,6 +8,7 @@ typedef struct {
     int    inhale_s;        /* 0 = use engine default */
     int    exhale_s;        /* 0 = use engine default */
     int    no_sound;        /* --no-sound / -n */
+    int    use_sound;       /* --sound: force WAV audio (aplay/paplay) */
     int    quiet;           /* --quiet / -q */
     int    no_log;          /* --no-log */
     int    measure_mode;    /* --measure / -m */

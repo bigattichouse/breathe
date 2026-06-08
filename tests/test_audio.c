@@ -24,7 +24,7 @@ static unsigned int le32(const unsigned char *p)
 int main(void)
 {
     /* Disable sound so no processes are spawned */
-    audio_init(1);
+    audio_init(1, 0);
 
     /* ------------------------------------------------------------------ */
     SUITE("audio_gen_wav basic");
@@ -98,20 +98,25 @@ int main(void)
 
     /* ------------------------------------------------------------------ */
     SUITE("audio_cycle_mode");
-    /* audio_init(1) set SOUND_OFF; reset to SOUND_ON for cycle test */
+    /* audio_init(1, 0) set SOUND_OFF; reset to SOUND_ON for cycle test */
     g_sound_mode = SOUND_ON;
     ASSERT_EQ((int)g_sound_mode, (int)SOUND_ON, "start: SOUND_ON");
     audio_cycle_mode();
-    ASSERT_EQ((int)g_sound_mode, (int)SOUND_BELL, "after 1st cycle: SOUND_BELL");
+    ASSERT_EQ((int)g_sound_mode, (int)SOUND_NOTIFY, "after 1st cycle: SOUND_NOTIFY");
     audio_cycle_mode();
-    ASSERT_EQ((int)g_sound_mode, (int)SOUND_OFF, "after 2nd cycle: SOUND_OFF");
+    ASSERT_EQ((int)g_sound_mode, (int)SOUND_BELL, "after 2nd cycle: SOUND_BELL");
     audio_cycle_mode();
-    ASSERT_EQ((int)g_sound_mode, (int)SOUND_ON, "after 3rd cycle: SOUND_ON");
+    ASSERT_EQ((int)g_sound_mode, (int)SOUND_OFF, "after 3rd cycle: SOUND_OFF");
+    audio_cycle_mode();
+    ASSERT_EQ((int)g_sound_mode, (int)SOUND_ON, "after 4th cycle: SOUND_ON");
 
     /* ------------------------------------------------------------------ */
     SUITE("audio_init and audio_mode_label");
-    audio_init(1);
-    ASSERT_EQ((int)g_sound_mode, (int)SOUND_OFF, "audio_init(1) sets SOUND_OFF");
+    audio_init(1, 0);
+    ASSERT_EQ((int)g_sound_mode, (int)SOUND_OFF, "audio_init(1, 0) sets SOUND_OFF");
+
+    g_sound_mode = SOUND_NOTIFY;
+    ASSERT_STR(audio_mode_label(), "notify", "SOUND_NOTIFY label == notify");
 
     g_sound_mode = SOUND_ON;
     ASSERT_STR(audio_mode_label(), "sound", "SOUND_ON label == sound");
